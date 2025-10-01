@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
-import { Search, MessageCircle, Users, Settings, User, Shield, Plus, LogOut } from 'lucide-react'
+import { MessageCircle, Users, Shield } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useChat } from '../../hooks/useChat'
 import { Header } from '../Common/Header'
 import { BottomNav } from '../Common/BottomNav'
 import { LoadingSpinner } from '../Common/LoadingSpinner'
+import { UsersList } from '../Users/UsersList'
+import { useNavigate } from 'react-router-dom'
 import './ChatList.css'
 
 interface ChatListProps {
@@ -16,8 +17,9 @@ export const ChatList: React.FC<ChatListProps> = ({ onSignOut }) => {
   const { user, profile, signOut } = useAuth()
   const { chats, loading, refreshChats } = useChat()
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState<'chats' | 'groups' | 'contacts' | 'settings'>('chats')
+  const [activeTab, setActiveTab] = useState<'chats' | 'users' | 'groups' | 'settings'>('chats')
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const navigate = useNavigate()
 
   useEffect(() => {
     console.log('ChatList - Auth state:', { user: user?.id, profile: profile?.id })
@@ -30,27 +32,22 @@ export const ChatList: React.FC<ChatListProps> = ({ onSignOut }) => {
     setIsRefreshing(false)
   }
 
-  const filteredChats = chats.filter(chat =>
-    chat.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    chat.messages?.[0]?.content?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  const handleCreateNewChat = () => {
-    // For now, just refresh to see if we can load any data
-    refreshChats()
-  }
-
   const handleSignOut = async () => {
     try {
       await signOut()
-      onSignOut?.() // Notify parent component
+      onSignOut?.()
     } catch (error) {
       console.error('Sign out error:', error)
     }
   }
 
+  const filteredChats = chats.filter(chat =>
+    chat.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    chat.messages?.[0]?.content?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   // If we have a user but chats are still loading
-  if (loading && user) {
+  if (loading && user && activeTab === 'chats') {
     return (
       <div className="chat-list-container">
         <Header title="Chatyio" />
@@ -61,68 +58,54 @@ export const ChatList: React.FC<ChatListProps> = ({ onSignOut }) => {
             Retry
           </button>
         </div>
-        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+        <BottomNav activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as any)} />
       </div>
     )
   }
 
-  return (
-    <div className="chat-list-container">
-      <Header 
-        title="Chatyio" 
-        showSearch 
-        onSearchChange={setSearchQuery}
-      />
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'chats':
+        return (
+          <div className="chat-list-content">
+            {/* Welcome Message */}
+            <div className="welcome-section">
+              <h2>Welcome{profile?.display_name ? `, ${profile.display_name}` : ''}!</h2>
+              <p>Start a new conversation or select an existing one.</p>
+            </div>
 
-      <div className="chat-list-content">
-        {/* Welcome Message */}
-        <div className="welcome-section">
-          <h2>Welcome{profile?.display_name ? `, ${profile.display_name}` : ''}!</h2>
-          <p>Start a new conversation or select an existing one.</p>
-        </div>
+            {/* Chats List */}
+            <div className="chats-section">
+              <div className="section-header">
+                <h3>Recent Conversations</h3>
+                <button 
+                  onClick={handleRefresh} 
+                  disabled={isRefreshing}
+                  className="refresh-button"
+                >
+                  {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
 
-        {/* Quick Actions */}
-        <div className="quick-actions">
-          <button className="action-button" onClick={handleCreateNewChat}>
-            <Plus className="action-icon" />
-            New Chat
-          </button>
-        </div>
-
-        {/* Chats List */}
-        <div className="chats-section">
-          <div className="section-header">
-            <h3>Recent Conversations</h3>
-            <button 
-              onClick={handleRefresh} 
-              disabled={isRefreshing}
-              className="refresh-button"
-            >
-              {'Refresh'}
-            </button>
-          </div>
-
-          {/* Conditional Chat List Rendering */}
-          {(() => {
-            if (filteredChats.length === 0) {
-              return (
+              {filteredChats.length === 0 ? (
                 <div className="empty-state">
                   <MessageCircle className="empty-icon" />
                   <h4>No conversations yet</h4>
-                  <p>Start a new chat to begin messaging</p>
-                  <button onClick={handleCreateNewChat} className="primary-button">
-                    Start Your First Chat
+                  <p>Start chatting with other users</p>
+                  <button 
+                    onClick={() => setActiveTab('users')} 
+                    className="primary-button"
+                  >
+                    Find Users to Chat With
                   </button>
                 </div>
-              )
-            } else {
-              return (
+              ) : (
                 <div className="chat-list">
                   {filteredChats.map(chat => (
                     <div
                       key={chat.id}
                       className="chat-item"
-                      onClick={() => console.log('Navigate to chat:', chat.id)}
+                      onClick={() => navigate(`/chat/${chat.id}`)}
                     >
                       <div className="chat-avatar">
                         {chat.avatar_url ? (
@@ -166,55 +149,70 @@ export const ChatList: React.FC<ChatListProps> = ({ onSignOut }) => {
                     </div>
                   ))}
                 </div>
-              )
-            }
-          })()}
-        </div>
-      </div>
-
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
-
-      {/* Settings Tab with Sign Out */}
-      {activeTab === 'settings' && (
-        <div className="settings-overlay">
-          <div className="settings-content">
-            <h3>Settings</h3>
-            <button onClick={handleSignOut} className="sign-out-button">
-              <LogOut className="icon" />
-              Sign Out
-            </button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
-  )
-}
-// UsersList component
-const UsersList: React.FC = () => {
-  const [users, setUsers] = useState<any[]>([])
-  const [loadingUsers, setLoadingUsers] = useState(true)
-
-  useEffect(() => {
-    const fetchUsers = async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, display_name, avatar_url, username')
-      if (!error) setUsers(data || [])
-      setLoadingUsers(false)
+        )
+      
+      case 'users':
+        return <UsersList />
+      
+      case 'groups':
+        return (
+          <div className="tab-content">
+            <div className="empty-state">
+              <Users className="empty-icon" />
+              <h4>Group Chats</h4>
+              <p>Group functionality coming soon!</p>
+            </div>
+          </div>
+        )
+      
+      case 'settings':
+        return (
+          <div className="tab-content">
+            <div className="settings-section">
+              <h3>Settings</h3>
+              <div className="settings-options">
+                <div className="setting-item">
+                  <strong>Account</strong>
+                  <p>Manage your account settings</p>
+                </div>
+                <div className="setting-item">
+                  <strong>Privacy</strong>
+                  <p>Control your privacy settings</p>
+                </div>
+                <div className="setting-item">
+                  <strong>Notifications</strong>
+                  <p>Configure your notifications</p>
+                </div>
+                <button 
+                  onClick={handleSignOut}
+                  className="sign-out-button"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      
+      default:
+        return null
     }
-    fetchUsers()
-  }, [])
-
-  if (loadingUsers) return <LoadingSpinner size="md" />
+  }
 
   return (
-    <div className="users-list">
-      {users.map(u => (
-        <div key={u.id} className="user-item">
-          <img src={u.avatar_url || '/default-avatar.png'} alt={u.display_name || u.username} className="user-avatar" />
-          <span>{u.display_name || u.username}</span>
-        </div>
-      ))}
+    <div className="chat-list-container">
+      <Header 
+        title="Chatyio" 
+        showSearch={activeTab === 'chats'}
+        onSearchChange={setSearchQuery}
+      />
+
+      {renderTabContent()}
+
+      <BottomNav activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as any)} />
     </div>
   )
 }

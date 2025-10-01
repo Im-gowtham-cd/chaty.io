@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Send, ArrowLeft, MoreVertical } from 'lucide-react'
 import { useMessages } from '../../hooks/useMessages'
+import { useAuth } from '../../hooks/useAuth'
 import { MessageBubble } from './MessageBubble'
 import { Header } from '../Common/Header'
 import { LoadingSpinner } from '../Common/LoadingSpinner'
@@ -16,6 +17,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, chatName, onBack
   const [newMessage, setNewMessage] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, loading, sending, sendMessage } = useMessages(chatId)
+  const { user } = useAuth()
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -70,7 +72,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, chatName, onBack
             <MessageBubble
               key={message.id}
               message={message}
-              isOwn={message.sender_id === 'current-user-id'} // You'd get this from auth
+              isOwn={!!user && message.sender_id === user.id}
             />
           ))}
           <div ref={messagesEndRef} />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { supabaseAdmin } from '../lib/supabaseAdmin'
 import { Chat, ChatWithDetails } from '../types/database'
 import { useAuth } from './useAuth'
 

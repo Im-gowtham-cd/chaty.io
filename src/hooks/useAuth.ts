@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, createContext, useContext } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { Profile } from '../types/database'
@@ -28,12 +28,11 @@ export const useAuth = () => {
         
         if (currentSession?.user) {
           await loadProfile(currentSession.user.id)
-        } else {
-          setLoading(false)
         }
         
       } catch (error) {
         console.error('Auth initialization error:', error)
+      } finally {
         setLoading(false)
       }
     }
@@ -50,6 +49,7 @@ export const useAuth = () => {
         
         if (currentSession?.user) {
           await loadProfile(currentSession.user.id)
+          setLoading(false)
         } else {
           setProfile(null)
           setLoading(false)

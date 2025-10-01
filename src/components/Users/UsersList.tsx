@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { supabaseAdmin } from '../../lib/supabaseAdmin'
 import { User, MessageCircle, Search } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { LoadingSpinner } from '../Common/LoadingSpinner'
+import { useNavigate } from 'react-router-dom'
 import './UsersList.css'
 
 interface UserProfile {
@@ -20,6 +22,8 @@ export const UsersList: React.FC = () => {
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [creatingChat, setCreatingChat] = useState<string | null>(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     loadUsers()
@@ -27,21 +31,22 @@ export const UsersList: React.FC = () => {
 
   const loadUsers = async () => {
     try {
+      console.log('Loading users...')
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .order('display_name', { ascending: true })
 
-      if (error) throw error
+      if (error) {
+        console.error('Error loading users:', error)
+        throw error
+      }
 
-      // Filter out current user and filter by search
+      console.log('Users loaded:', data?.length)
+      
+      // Filter out current user
       const filteredUsers = (data || [])
         .filter(profile => profile.id !== currentUser?.id)
-        .filter(profile => 
-          profile.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          profile.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          profile.phone?.includes(searchQuery)
-        )
 
       setUsers(filteredUsers)
     } catch (error) {
@@ -52,52 +57,109 @@ export const UsersList: React.FC = () => {
   }
 
   const startChat = async (targetUserId: string) => {
+    if (!currentUser) return
+    
+    setCreatingChat(targetUserId)
+    
     try {
-      // Check if chat already exists
+      console.log('Starting chat with user:', targetUserId)
+      
+      // Check if direct chat already exists between these two users
       const { data: existingChats, error: chatError } = await supabase
-        .from('chat_members')
-        .select('chat_id')
-        .eq('user_id', currentUser?.id)
+        .from('chats')
+        .select(`
+          id,
+          chat_members!inner(user_id)
+        `)
+        .eq('type', 'direct')
+        .eq('chat_members.user_id', currentUser.id)
 
-      if (chatError) throw chatError
-
-      const existingChatIds = existingChats?.map(chat => chat.chat_id) || []
-
-      const { data: targetUserChats, error: targetError } = await supabase
-        .from('chat_members')
-        .select('chat_id')
-        .eq('user_id', targetUserId)
-        .in('chat_id', existingChatIds)
-
-      if (targetError) throw targetError
-
-      // If chat exists, navigate to it
-      if (targetUserChats && targetUserChats.length > 0) {
-        console.log('Chat exists:', targetUserChats[0].chat_id)
-        // Navigate to existing chat
-        return
+      if (chatError) {
+        console.error('Error checking existing chats:', chatError)
+        throw chatError
       }
 
-      // Create new chat
-      const { data: newChat, error: createError } = await supabase
+      console.log('Existing chats:', existingChats)
+
+      // If we have existing chats, check if any include the target user
+      if (existingChats && existingChats.length > 0) {
+        const chatIds = existingChats.map(chat => chat.id)
+        
+        const { data: targetChats, error: targetError } = await supabase
+          .from('chat_members')
+          .select('chat_id')
+          .eq('user_id', targetUserId)
+          .in('chat_id', chatIds)
+
+        if (targetError) {
+          console.error('Error checking target user chats:', targetError)
+          throw targetError
+        }
+
+        console.log('Target user chats:', targetChats)
+
+        // If chat exists, navigate to it
+        if (targetChats && targetChats.length > 0) {
+          const existingChatId = targetChats[0].chat_id
+          console.log('Chat already exists:', existingChatId)
+          navigate(`/chat/${existingChatId}`)
+          return
+        }
+      }
+
+      // Create new direct chat
+      console.log('Creating new chat...')
+      const { data: newChat, error: createError } = await supabaseAdmin
         .from('chats')
         .insert({
           type: 'direct',
-          created_by: currentUser?.id,
+          created_by: currentUser.id,
           is_protected: false,
         })
         .select()
         .single()
 
-      if (createError) throw createError
+      if (createError) {
+        console.error('Error creating chat:', createError)
+        // If duplicate chat prevented by constraint, locate the existing chat and navigate
+        const message = (createError as any)?.message || ''
+        const code = (createError as any)?.code || ''
+        if (code === '23505' || message.toLowerCase().includes('duplicate') || message.toLowerCase().includes('unique')) {
+          console.log('Chat likely already exists, searching for existing direct chat between users')
+          // Find common chat where both users are members and type is direct
+          const { data: myChats, error: myChatsError } = await supabase
+            .from('chat_members')
+            .select('chat_id')
+            .eq('user_id', currentUser.id)
 
-      // Add both users to chat
-      const { error: membersError } = await supabase
+          if (!myChatsError && myChats && myChats.length > 0) {
+            const chatIds = myChats.map(c => c.chat_id)
+            const { data: targetMemberships, error: targetMembershipsError } = await supabase
+              .from('chat_members')
+              .select('chat_id')
+              .eq('user_id', targetUserId)
+              .in('chat_id', chatIds)
+
+            if (!targetMembershipsError && targetMemberships && targetMemberships.length > 0) {
+              const existingChatId = targetMemberships[0].chat_id
+              console.log('Navigating to existing chat:', existingChatId)
+              navigate(`/chat/${existingChatId}`)
+              return
+            }
+          }
+        }
+        throw createError
+      }
+
+      console.log('New chat created:', newChat)
+
+      // Add both users to the chat
+      const { error: membersError } = await supabaseAdmin
         .from('chat_members')
         .insert([
           {
             chat_id: newChat.id,
-            user_id: currentUser?.id,
+            user_id: currentUser.id,
             role: 'owner'
           },
           {
@@ -107,12 +169,23 @@ export const UsersList: React.FC = () => {
           }
         ])
 
-      if (membersError) throw membersError
+      if (membersError) {
+        console.error('Error adding members:', membersError)
+        throw membersError
+      }
 
-      console.log('New chat created:', newChat.id)
+      console.log('Chat members added successfully')
+      navigate(`/chat/${newChat.id}`)
       
-    } catch (error) {
+      // Refresh the users list to show updated chat status
+      loadUsers()
+      
+    } catch (error: any) {
       console.error('Error starting chat:', error)
+      const message = error?.message || 'Unknown error'
+      alert(`Failed to start chat: ${message}`)
+    } finally {
+      setCreatingChat(null)
     }
   }
 
@@ -138,6 +211,9 @@ export const UsersList: React.FC = () => {
       <div className="users-header">
         <h2>Available Users</h2>
         <p>Start a conversation with other users</p>
+        <button onClick={loadUsers} className="refresh-button">
+          Refresh List
+        </button>
       </div>
 
       <div className="search-section">
@@ -145,7 +221,7 @@ export const UsersList: React.FC = () => {
           <Search className="search-icon" />
           <input
             type="text"
-            placeholder="Search users..."
+            placeholder="Search users by name, email, or phone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="search-input"
@@ -153,19 +229,25 @@ export const UsersList: React.FC = () => {
         </div>
       </div>
 
+      <div className="users-stats">
+        <p>Found {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}</p>
+      </div>
+
       <div className="users-list">
         {filteredUsers.length === 0 ? (
           <div className="empty-state">
             <User className="empty-icon" />
             <h4>No users found</h4>
-            <p>Try adjusting your search terms</p>
+            <p>Try adjusting your search terms or refresh the list</p>
+            <button onClick={loadUsers} className="refresh-button">
+              Refresh Users
+            </button>
           </div>
         ) : (
           filteredUsers.map(user => (
             <div
               key={user.id}
               className="user-item"
-              onClick={() => startChat(user.id)}
             >
               <div className="user-avatar">
                 {user.avatar_url ? (
@@ -188,10 +270,23 @@ export const UsersList: React.FC = () => {
                 {user.status && (
                   <p className="user-status">{user.status}</p>
                 )}
+                <p className="user-joined">
+                  Joined: {new Date(user.created_at).toLocaleDateString()}
+                </p>
               </div>
-              <button className="start-chat-button">
-                <MessageCircle className="chat-icon" />
-                Chat
+              <button 
+                onClick={() => startChat(user.id)}
+                disabled={creatingChat === user.id}
+                className="start-chat-button"
+              >
+                {creatingChat === user.id ? (
+                  <LoadingSpinner size="sm" color="white" />
+                ) : (
+                  <>
+                    <MessageCircle className="chat-icon" />
+                    Start Chat
+                  </>
+                )}
               </button>
             </div>
           ))

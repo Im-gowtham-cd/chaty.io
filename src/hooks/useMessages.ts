@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { supabaseAdmin } from '../lib/supabaseAdmin'
 import { Message } from '../types/database'
 import { useAuth } from './useAuth'
 
@@ -21,7 +22,7 @@ export const useMessages = (chatId: string) => {
 
     setLoading(true)
     
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('messages')
       .select('*, profiles(*)')
       .eq('chat_id', chatId)

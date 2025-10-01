@@ -10,8 +10,8 @@ interface BottomNavProps {
 export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) => {
   const tabs = [
     { id: 'chats', icon: MessageCircle, label: 'Chats' },
-    { id: 'groups', icon: Users, label: 'Groups' },
-    { id: 'contacts', icon: User, label: 'Contacts' },
+    { id: 'users', icon: Users, label: 'Users' },
+    { id: 'groups', icon: User, label: 'Groups' },
     { id: 'settings', icon: Settings, label: 'Settings' },
   ]
 

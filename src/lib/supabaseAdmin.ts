@@ -1,11 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../types/database'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
+const supabaseUrl = 'https://czuwlhshtmsncwyhnsnl.supabase.co'
+// Service role key must be provided at build time via Vite env
+// Note: In the browser, never expose service role. Use only for local dev or secure server-side.
+const supabaseServiceKey = (import.meta as any).env?.VITE_SUPABASE_SERVICE_ROLE_KEY
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing Supabase admin environment variables')
+if (!supabaseServiceKey) {
+  throw new Error('Missing Supabase service role key (VITE_SUPABASE_SERVICE_ROLE_KEY)')
 }
 
 // Create Supabase client with service role key (bypasses RLS)
