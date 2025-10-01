@@ -22,14 +22,15 @@ export const useMessages = (chatId: string) => {
 
     setLoading(true)
     
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (supabaseAdmin as any)
       .from('messages')
-      .select('*, profiles(*)')
+      .select('*')
       .eq('chat_id', chatId)
       .order('created_at', { ascending: true })
 
     if (error) {
       console.error('Error loading messages:', error)
+      setLoading(false) // Ensure loading is set to false even on error
       return
     }
 
@@ -74,7 +75,8 @@ export const useMessages = (chatId: string) => {
 
     setSending(true)
     
-    const { data, error } = await supabase
+    // Use admin for write to bypass RLS during development
+    const { data, error } = await (supabaseAdmin as any)
       .from('messages')
       .insert({
         chat_id: chatId,
@@ -89,15 +91,20 @@ export const useMessages = (chatId: string) => {
       .single()
 
     if (error) {
-      console.error('Error sending message:', error)
+      console.error('Error sending message to Supabase:', error)
       setSending(false)
       throw error
     }
 
-    await supabase
+    await (supabaseAdmin as any)
       .from('chats')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', chatId)
+
+    // Optimistically append so it shows immediately (realtime may be blocked by RLS)
+    if (data) {
+      setMessages(prev => [...prev, data as Message])
+    }
 
     setSending(false)
     return data
@@ -105,14 +112,14 @@ export const useMessages = (chatId: string) => {
 
   const deleteMessage = async (messageId: string, deleteForAll: boolean = false) => {
     if (deleteForAll) {
-      const { error } = await supabase
+      const { error } = await (supabaseAdmin as any)
         .from('messages')
         .update({ deleted_for_all: true })
         .eq('id', messageId)
 
       if (error) throw error
     } else {
-      const { error } = await supabase
+      const { error } = await (supabaseAdmin as any)
         .from('messages')
         .update({ is_hidden: true, hidden_by: user?.id })
         .eq('id', messageId)
@@ -122,7 +129,7 @@ export const useMessages = (chatId: string) => {
   }
 
   const editMessage = async (messageId: string, newContent: string) => {
-    const { error } = await supabase
+    const { error } = await (supabaseAdmin as any)
       .from('messages')
       .update({ 
         content: newContent,

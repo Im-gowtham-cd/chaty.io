@@ -9,16 +9,26 @@ if (!supabaseKey) {
   throw new Error('Missing Supabase anon key (VITE_SUPABASE_ANON_KEY)')
 }
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce'
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10
-    }
+// Avoid multiple clients during Vite HMR by caching on globalThis
+const getOrCreateClient = () => {
+  const g = globalThis as any
+  if (!g.__supabase_chatyio_client) {
+    g.__supabase_chatyio_client = createClient<Database>(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+        storageKey: 'sb-chatyio-auth'
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        }
+      }
+    })
   }
-})
+  return g.__supabase_chatyio_client as ReturnType<typeof createClient<Database>>
+}
+
+export const supabase = getOrCreateClient()

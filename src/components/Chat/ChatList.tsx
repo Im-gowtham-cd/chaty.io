@@ -14,17 +14,26 @@ interface ChatListProps {
 }
 
 export const ChatList: React.FC<ChatListProps> = ({ onSignOut }) => {
-  const { user, profile, signOut } = useAuth()
-  const { chats, loading, refreshChats } = useChat()
+  const { user, profile, signOut, loading: authLoading } = useAuth()
+  const { chats, loading: chatsLoading, refreshChats } = useChat()
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<'chats' | 'users' | 'groups' | 'settings'>('chats')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const navigate = useNavigate()
 
-  useEffect(() => {
-    console.log('ChatList - Auth state:', { user: user?.id, profile: profile?.id })
-    console.log('ChatList - Chats data:', { chatsCount: chats.length, loading })
-  }, [user, profile, chats, loading])
+  // If authentication is still loading, show a global loading spinner
+  if (authLoading) {
+    return (
+      <div className="chat-list-container">
+        <Header title="Chatyio" />
+        <div className="loading-container">
+          <LoadingSpinner size="lg" />
+          <p>Loading authentication...</p>
+        </div>
+        <BottomNav activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as any)} />
+      </div>
+    )
+  }
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -47,7 +56,7 @@ export const ChatList: React.FC<ChatListProps> = ({ onSignOut }) => {
   )
 
   // If we have a user but chats are still loading
-  if (loading && user && activeTab === 'chats') {
+  if (chatsLoading && user && activeTab === 'chats') {
     return (
       <div className="chat-list-container">
         <Header title="Chatyio" />

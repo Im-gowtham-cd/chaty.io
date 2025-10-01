@@ -55,7 +55,7 @@ export const useChat = () => {
         return
       }
 
-      console.log('Raw chat data:', data)
+      console.log('Raw chat data received:', data)
 
       const chatsWithDetails: ChatWithDetails[] = (data || [])
         .map(item => item.chat)
@@ -73,6 +73,7 @@ export const useChat = () => {
       setError('Failed to load chats')
       setChats([])
     } finally {
+      console.log('loadChats finally block: setting loading to false')
       setLoading(false)
     }
   }
