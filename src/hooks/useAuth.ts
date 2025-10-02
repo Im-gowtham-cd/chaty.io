@@ -28,11 +28,12 @@ export const useAuth = () => {
         
         if (currentSession?.user) {
           await loadProfile(currentSession.user.id)
+        } else {
+          setLoading(false)
         }
         
       } catch (error) {
         console.error('Auth initialization error:', error)
-      } finally {
         setLoading(false)
       }
     }
@@ -49,7 +50,6 @@ export const useAuth = () => {
         
         if (currentSession?.user) {
           await loadProfile(currentSession.user.id)
-          setLoading(false)
         } else {
           setProfile(null)
           setLoading(false)
@@ -73,15 +73,18 @@ export const useAuth = () => {
       if (error) {
         console.error('Error loading profile:', error)
         // Don't throw error - user might still be authenticated
+        setProfile(null)
       } else {
         setProfile(data)
         console.log('Profile loaded:', data.display_name)
       }
     } catch (error) {
       console.error('Error in loadProfile:', error)
-    } finally {
-      setLoading(false)
+      setProfile(null)
     }
+    
+    // Always set loading to false after profile attempt
+    setLoading(false)
   }
 
   const signOut = async () => {

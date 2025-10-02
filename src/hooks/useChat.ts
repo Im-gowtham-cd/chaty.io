@@ -32,7 +32,7 @@ export const useChat = () => {
     setError(null)
     
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabaseAdmin as any)
         .from('chat_members')
         .select(`
           chat:chats(
@@ -60,10 +60,16 @@ export const useChat = () => {
       const chatsWithDetails: ChatWithDetails[] = (data || [])
         .map(item => item.chat)
         .filter(chat => chat !== null)
-        .map(chat => ({
-          ...chat,
-          unread_count: calculateUnreadCount(chat.messages || [], user.id)
-        }))
+        .map(chat => {
+          const orderedMessages = (chat.messages || []).slice().sort((a: any, b: any) => (
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          ))
+          return {
+            ...chat,
+            messages: orderedMessages,
+            unread_count: calculateUnreadCount(orderedMessages, user.id)
+          }
+        })
 
       console.log('Processed chats:', chatsWithDetails)
       setChats(chatsWithDetails)
@@ -89,8 +95,8 @@ export const useChat = () => {
 
     console.log('Subscribing to chat changes for user:', user.id)
 
-    const subscription = supabase
-      .channel('chat_changes')
+    const subscription = (supabaseAdmin as any)
+      .channel(`chat_changes_${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -139,33 +145,52 @@ export const useChat = () => {
           table: 'messages'
         },
         (payload) => {
-          console.log('Messages changed:', payload)
-          // Instead of reloading all chats, update the specific chat's messages
+          console.log('Messages changed for chat list:', payload)
+          // Update chat list when messages change in any chat this user is part of
           setChats(prevChats => {
+            let matched = false
             const newChats = prevChats.map(chat => {
               if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
                 const newMessage = payload.new as any;
                 if (chat.id === newMessage.chat_id) {
-                  const updatedMessages = chat.messages ? [...chat.messages, newMessage] : [newMessage];
+                  matched = true
+                  // Check if message already exists to avoid duplicates
+                  const existingMessages = chat.messages || []
+                  const messageExists = existingMessages.some(msg => msg.id === newMessage.id)
+                  const updatedMessages = messageExists 
+                    ? existingMessages.map(msg => msg.id === newMessage.id ? newMessage : msg)
+                    : [...existingMessages, newMessage];
+                  const orderedMessages = updatedMessages.slice().sort((a: any, b: any) => (
+                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                  ))
                   return {
                     ...chat,
-                    messages: updatedMessages,
-                    unread_count: calculateUnreadCount(updatedMessages, user.id)
+                    messages: orderedMessages,
+                    unread_count: calculateUnreadCount(orderedMessages, user.id)
                   };
                 }
               } else if (payload.eventType === 'DELETE') {
                 const oldMessage = payload.old as any;
                 if (chat.id === oldMessage.chat_id) {
+                  matched = true
                   const updatedMessages = chat.messages ? chat.messages.filter(msg => msg.id !== oldMessage.id) : [];
+                  const orderedMessages = updatedMessages.slice().sort((a: any, b: any) => (
+                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                  ))
                   return {
                     ...chat,
-                    messages: updatedMessages,
-                    unread_count: calculateUnreadCount(updatedMessages, user.id)
+                    messages: orderedMessages,
+                    unread_count: calculateUnreadCount(orderedMessages, user.id)
                   };
                 }
               }
               return chat;
             });
+            // If message belongs to a chat we don't have yet, refresh the entire list
+            if (!matched && payload.eventType === 'INSERT') {
+              console.log('New message in unknown chat, refreshing chat list')
+              loadChats()
+            }
             return newChats;
           });
         }

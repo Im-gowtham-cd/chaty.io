@@ -41,7 +41,7 @@ export const useMessages = (chatId: string) => {
   const subscribeToMessages = () => {
     if (!chatId) return
 
-    const subscription = supabase
+    const subscription = (supabaseAdmin as any)
       .channel(`messages:${chatId}`)
       .on(
         'postgres_changes',
@@ -52,8 +52,15 @@ export const useMessages = (chatId: string) => {
           filter: `chat_id=eq.${chatId}`
         },
         (payload) => {
+          console.log('Real-time message event:', payload)
           if (payload.eventType === 'INSERT') {
-            setMessages(prev => [...prev, payload.new as Message])
+            const newMessage = payload.new as Message
+            setMessages(prev => {
+              // Avoid duplicates (in case of optimistic update)
+              const exists = prev.some(msg => msg.id === newMessage.id)
+              if (exists) return prev
+              return [...prev, newMessage]
+            })
           } else if (payload.eventType === 'UPDATE') {
             setMessages(prev => prev.map(msg => 
               msg.id === payload.new.id ? payload.new as Message : msg
@@ -63,7 +70,9 @@ export const useMessages = (chatId: string) => {
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log(`Messages subscription for chat ${chatId}:`, status)
+      })
 
     return () => {
       subscription.unsubscribe()
