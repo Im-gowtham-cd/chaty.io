@@ -37,35 +37,10 @@ function App() {
     setShowAuth(false)
   }
 
-  // Show loading spinner only during initial auth check
-  if (loading) {
-    return (
-      <div className="app-loading">
-        <div className="loading-content">
-          <div className="loading-logo">
-            <LoadingSpinner size="lg" color="primary" />
-          </div>
-          <p className="loading-text">Loading Chatyio...</p>
-        </div>
-      </div>
-    )
-  }
-
   // Show auth screen if no user or explicitly showing auth
   if (!user || showAuth) {
     return (
-      <Suspense fallback={
-        <div className="app-loading">
-          <div className="loading-content">
-            <div className="loading-logo">
-              <LoadingSpinner size="lg" color="primary" />
-            </div>
-            <p className="loading-text">Loading...</p>
-          </div>
-        </div>
-      }>
-        <PasswordAuth onAuthSuccess={handleAuthSuccess} />
-      </Suspense>
+      <PasswordAuth onAuthSuccess={handleAuthSuccess} />
     )
   }
 

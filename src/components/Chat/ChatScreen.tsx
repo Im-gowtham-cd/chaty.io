@@ -46,18 +46,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ chatId, chatName, onBack
     }
   }
 
-  if (loading) {
-    return (
-      <div className="chat-screen-container">
-        <Header title={chatName} onProfileClick={onBack} />
-        <div className="loading-container">
-          <LoadingSpinner size="lg" />
-          <p>Loading messages...</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="chat-screen-container">
       <Header 

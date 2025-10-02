@@ -22,7 +22,7 @@ export const useMessages = (chatId: string) => {
 
     setLoading(true)
     
-    const { data, error } = await (supabaseAdmin as any)
+    const { data, error } = await supabase
       .from('messages')
       .select('*')
       .eq('chat_id', chatId)
@@ -41,7 +41,7 @@ export const useMessages = (chatId: string) => {
   const subscribeToMessages = () => {
     if (!chatId) return
 
-    const subscription = (supabaseAdmin as any)
+    const subscription = supabase
       .channel(`messages:${chatId}`)
       .on(
         'postgres_changes',
@@ -84,8 +84,7 @@ export const useMessages = (chatId: string) => {
 
     setSending(true)
     
-    // Use admin for write to bypass RLS during development
-    const { data, error } = await (supabaseAdmin as any)
+    const { data, error } = await supabase
       .from('messages')
       .insert({
         chat_id: chatId,
@@ -105,7 +104,7 @@ export const useMessages = (chatId: string) => {
       throw error
     }
 
-    await (supabaseAdmin as any)
+    await supabase
       .from('chats')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', chatId)
@@ -121,14 +120,14 @@ export const useMessages = (chatId: string) => {
 
   const deleteMessage = async (messageId: string, deleteForAll: boolean = false) => {
     if (deleteForAll) {
-      const { error } = await (supabaseAdmin as any)
+      const { error } = await supabase
         .from('messages')
         .update({ deleted_for_all: true })
         .eq('id', messageId)
 
       if (error) throw error
     } else {
-      const { error } = await (supabaseAdmin as any)
+      const { error } = await supabase
         .from('messages')
         .update({ is_hidden: true, hidden_by: user?.id })
         .eq('id', messageId)
@@ -138,7 +137,7 @@ export const useMessages = (chatId: string) => {
   }
 
   const editMessage = async (messageId: string, newContent: string) => {
-    const { error } = await (supabaseAdmin as any)
+    const { error } = await supabase
       .from('messages')
       .update({ 
         content: newContent,
